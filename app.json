@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "productivity",
-    "slug": "productivity",
+    "name": "Rukz",
+    "slug": "the-razz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,10 +15,20 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.uthamirasusteam.therazz"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2bca4d0f-7789-4607-a83b-904bfe6b6ebf"
+      }
+    },
+    "owner": "uthamirasus-team",
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

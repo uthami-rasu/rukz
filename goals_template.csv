@@ -1,0 +1,7 @@
+Goal Name,Goal Description,Goal Target Date,Area Name,Area Description,Task Name,Task Notes,Task Due Date,Task Priority
+Health & Fitness,Improve cardiovascular health and strength,2026-12-31,Cardio training,Running and high-intensity interval training,Morning Run,5km outdoor jog in the park,2026-07-01,Medium
+Health & Fitness,Improve cardiovascular health and strength,2026-12-31,Cardio training,Running and high-intensity interval training,HIIT Session,20-minute indoor tabata workout,2026-07-03,High
+Health & Fitness,Improve cardiovascular health and strength,2026-12-31,Weight lifting,Progressive overload training,Upper Body Workout,Bench press and overhead press,2026-07-05,High
+Career Development,Learn cloud native technologies and master kubernetes,2026-12-31,Kubernetes Mastery,Get certified and run production clusters,Read Kubernetes Docs,Study Pod lifecycle and services,2026-07-10,Medium
+Career Development,Learn cloud native technologies and master kubernetes,2026-12-31,Kubernetes Mastery,Get certified and run production clusters,Set up Minikube,Deploy local cluster for practice,2026-07-12,High
+Career Development,Learn cloud native technologies and master kubernetes,2026-12-31,System Architecture,Study distributed systems and databases,Read Designing Data-Intensive Applications,Chapter 3: Storage and Retrieval,2026-07-20,Low
