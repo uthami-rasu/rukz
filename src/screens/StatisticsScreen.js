@@ -9,7 +9,14 @@ import ProgressBar from "../components/ui/ProgressBar";
 
 export default function StatisticsScreen({ state }) {
   const t = useTheme();
-  const { goals, subGoals, tasks } = state;
+  const activeGoals = state.goals.filter(g => g.status !== "archived");
+  const activeSubGoals = state.subGoals.filter(s => activeGoals.some(g => g.id === s.goalId));
+  const activeTasks = state.tasks.filter(tk => activeSubGoals.some(s => s.id === tk.subGoalId));
+
+  const goals = activeGoals;
+  const subGoals = activeSubGoals;
+  const tasks = activeTasks;
+
   const done    = tasks.filter(tk => tk.status === "completed").length;
   const pending = tasks.length - done;
   const months  = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
-import { Layers, AlignLeft, ListTodo, Plus, Trash2, ChevronRight } from "lucide-react-native";
+import { Layers, AlignLeft, ListTodo, Plus, Trash2, ChevronRight, Archive } from "lucide-react-native";
 import { useTheme } from "../context/ThemeContext";
 import { pct } from "../utils/helpers";
 import SectionHeader from "../components/ui/SectionHeader";
@@ -139,22 +139,50 @@ export default function GoalDetailScreen({ state, dispatch, params, navigate, go
         <SheetBtn onClick={add} icon={Plus}>Create Area</SheetBtn>
       </Sheet>
 
-      {/* Delete */}
-      <TouchableOpacity
-        onPress={() => Alert.alert("Delete Goal", "Delete this goal and all its areas & tasks? This cannot be undone.", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: () => { dispatch({ type: "DELETE_GOAL", id: goal.id }); goBack(); } },
-        ])}
-        style={{
-          marginTop: 20, padding: 18, borderRadius: 14,
-          backgroundColor: t.red + "12",
-          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-          borderWidth: 1.5, borderColor: t.red + "25",
-        }}
-      >
-        <Trash2 size={16} color={t.red} strokeWidth={2.5} />
-        <Text style={{ color: t.red, fontWeight: "800", fontSize: 15, textTransform: "uppercase", letterSpacing: 0.5 }}>Delete Goal</Text>
-      </TouchableOpacity>
+      {/* Action Buttons: Archive & Delete */}
+      <View style={{ flexDirection: "row", gap: 12, marginTop: 24 }}>
+        <TouchableOpacity
+          onPress={() => {
+            if (goal.status === "archived") {
+              dispatch({ type: "UNARCHIVE_GOAL", id: goal.id });
+              Alert.alert("Goal Unarchived", "This goal is now active again.");
+            } else {
+              dispatch({ type: "ARCHIVE_GOAL", id: goal.id });
+              Alert.alert("Goal Archived", "This goal has been archived.");
+              goBack();
+            }
+          }}
+          activeOpacity={0.7}
+          style={{
+            flex: 1, paddingVertical: 16, borderRadius: 14,
+            backgroundColor: t.isDark ? "#222228" : "#E5E5EA",
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+            borderWidth: 1.5, borderColor: t.border,
+          }}
+        >
+          <Archive size={16} color={t.labelPrimary} strokeWidth={2.5} />
+          <Text style={{ color: t.labelPrimary, fontWeight: "800", fontSize: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            {goal.status === "archived" ? "Unarchive" : "Archive"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => Alert.alert("Delete Goal", "Delete this goal and all its areas & tasks? This cannot be undone.", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Delete", style: "destructive", onPress: () => { dispatch({ type: "DELETE_GOAL", id: goal.id }); goBack(); } },
+          ])}
+          activeOpacity={0.7}
+          style={{
+            flex: 1, paddingVertical: 16, borderRadius: 14,
+            backgroundColor: t.red + "12",
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+            borderWidth: 1.5, borderColor: t.red + "25",
+          }}
+        >
+          <Trash2 size={16} color={t.red} strokeWidth={2.5} />
+          <Text style={{ color: t.red, fontWeight: "800", fontSize: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>Delete</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }

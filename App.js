@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity,
-  SafeAreaView, Platform, Alert, BackHandler,
+  Platform, Alert, BackHandler,
 } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { useFonts } from "expo-font";
+import { Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
@@ -34,7 +36,7 @@ import GoalsScreen        from "./src/screens/GoalsScreen";
 import GoalDetailScreen   from "./src/screens/GoalDetailScreen";
 import SubGoalDetailScreen from "./src/screens/SubGoalDetailScreen";
 import SearchScreen       from "./src/screens/SearchScreen";
-import CalendarScreen     from "./src/screens/CalendarScreen";
+import WatchLaterScreen   from "./src/screens/WatchLaterScreen";
 import StatisticsScreen   from "./src/screens/StatisticsScreen";
 
 export default function App() {
@@ -101,9 +103,9 @@ export default function App() {
   };
 
   const handleImport = async () => {
-    Alert.alert("Confirm Import", "This will replace all your current data on this phone. Do you want to proceed?", [
+    Alert.alert("Confirm Import", "This will merge the imported goals, tasks, and watch later links with your current data without overwriting. Do you want to proceed?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Import & Overwrite", style: "destructive", onPress: async () => {
+      { text: "Import & Merge", style: "default", onPress: async () => {
         try {
           const result = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true });
           if (result.canceled || !result.assets?.length) return;
@@ -118,10 +120,83 @@ export default function App() {
           }
           const parsed = JSON.parse(content);
           if (parsed.goals && parsed.subGoals && parsed.tasks) {
-            dispatch({ type: "SET_STATE", state: parsed });
+            // Intelligent Merge
+            const currentGoals = [...appState.goals];
+            const currentSubGoals = [...appState.subGoals];
+            const currentTasks = [...appState.tasks];
+            const currentWatchLater = [...(appState.watchLater || [])];
+            const currentCategories = [...(appState.watchLaterCategories || ["YouTube", "Instagram", "Tutorials", "Articles", "Other"])];
+
+            const idMap = {};
+
+            // 1. Merge Goals
+            (parsed.goals || []).forEach(g => {
+              const existingGoal = currentGoals.find(cg => cg.name.trim().toLowerCase() === g.name.trim().toLowerCase());
+              if (existingGoal) {
+                idMap[g.id] = existingGoal.id;
+                if (g.status === "active") existingGoal.status = "active";
+              } else {
+                const newId = Date.now() + Math.random();
+                idMap[g.id] = newId;
+                currentGoals.push({ ...g, id: newId, status: g.status || "active" });
+              }
+            });
+
+            // 2. Merge SubGoals
+            (parsed.subGoals || []).forEach(s => {
+              const newGoalId = idMap[s.goalId];
+              if (!newGoalId) return;
+              const existingSub = currentSubGoals.find(cs => cs.goalId === newGoalId && cs.name.trim().toLowerCase() === s.name.trim().toLowerCase());
+              if (existingSub) {
+                idMap[s.id] = existingSub.id;
+              } else {
+                const newId = Date.now() + Math.random();
+                idMap[s.id] = newId;
+                currentSubGoals.push({ ...s, id: newId, goalId: newGoalId });
+              }
+            });
+
+            // 3. Merge Tasks
+            (parsed.tasks || []).forEach(t => {
+              const newSubGoalId = idMap[t.subGoalId];
+              if (!newSubGoalId) return;
+              const existingTask = currentTasks.find(ct => ct.subGoalId === newSubGoalId && ct.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+              if (!existingTask) {
+                currentTasks.push({ ...t, id: Date.now() + Math.random(), subGoalId: newSubGoalId });
+              }
+            });
+
+            // 4. Merge Watch Later
+            (parsed.watchLater || []).forEach(item => {
+              const exists = currentWatchLater.some(cw => cw.url.trim().toLowerCase() === item.url.trim().toLowerCase());
+              if (!exists) {
+                currentWatchLater.push({ ...item, id: Date.now() + Math.random() });
+              }
+            });
+
+            // 5. Merge Categories
+            (parsed.watchLaterCategories || []).forEach(cat => {
+              if (!currentCategories.includes(cat)) {
+                currentCategories.push(cat);
+              }
+            });
+
+            dispatch({
+              type: "SET_STATE",
+              state: {
+                goals: currentGoals,
+                subGoals: currentSubGoals,
+                tasks: currentTasks,
+                watchLater: currentWatchLater,
+                watchLaterCategories: currentCategories,
+              }
+            });
+
             setShowSettings(false);
-            Alert.alert("Success", "Data imported successfully.");
-          } else Alert.alert("Error", "Invalid backup file structure.");
+            Alert.alert("Success", "Imported and merged data successfully.");
+          } else {
+            Alert.alert("Error", "Invalid backup file structure.");
+          }
         } catch (e) { console.error(e); Alert.alert("Error", "Could not read backup file."); }
       }},
     ]);
@@ -178,7 +253,15 @@ export default function App() {
         }
       });
 
-      dispatch({ type: "SET_STATE", state: { goals: tempGoals, subGoals: tempSubGoals, tasks: tempTasks } });
+      dispatch({
+        type: "SET_STATE",
+        state: {
+          ...appState,
+          goals: tempGoals,
+          subGoals: tempSubGoals,
+          tasks: tempTasks
+        }
+      });
       setShowSettings(false);
       Alert.alert("Import Complete", `Added:\n- ${ga} new Goal(s)\n- ${sa} new Focus Area(s)\n- ${ta} new Task(s)`);
     } catch (e) { console.error(e); Alert.alert("Import Error", "Failed to parse the Excel file."); }
@@ -220,7 +303,7 @@ export default function App() {
       case "dashboard": return <DashboardScreen state={appState} setTab={setTab} setShowSettings={setShowSettings} handleDownloadTemplate={handleDownloadTemplate} navigate={navigate} />;
       case "goals":     return <GoalsScreen     state={appState} dispatch={dispatch} navigate={navigate} />;
       case "search":    return <SearchScreen    state={appState} navigate={navigate} />;
-      case "calendar":  return <CalendarScreen  state={appState} />;
+      case "watchLater": return <WatchLaterScreen state={appState} dispatch={dispatch} />;
       case "stats":     return <StatisticsScreen state={appState} />;
     }
   }
@@ -228,9 +311,10 @@ export default function App() {
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: theme.bg }} />;
 
   return (
-    <ThemeCtx.Provider value={theme}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <StatusBar style={dark ? "light" : "dark"} />
+    <SafeAreaProvider>
+      <ThemeCtx.Provider value={theme}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <StatusBar style={dark ? "light" : "dark"} />
 
         {/* Header */}
         <View style={{
@@ -258,7 +342,7 @@ export default function App() {
           )}
           <Text numberOfLines={1} style={{
             fontSize: headerTitle === "Rukz" ? 38 : 22,
-            fontWeight: "900",
+            fontWeight: headerTitle === "Rukz" ? "normal" : "900",
             color: theme.labelPrimary,
             flex: 1,
             letterSpacing: headerTitle === "Rukz" ? 0 : 1.5,
@@ -380,7 +464,8 @@ export default function App() {
             </View>
           </View>
         </Sheet>
-      </SafeAreaView>
-    </ThemeCtx.Provider>
+        </SafeAreaView>
+      </ThemeCtx.Provider>
+    </SafeAreaProvider>
   );
 }

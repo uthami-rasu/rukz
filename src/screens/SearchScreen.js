@@ -10,7 +10,13 @@ import PriorityChip from "../components/ui/PriorityChip";
 export default function SearchScreen({ state, navigate }) {
   const t = useTheme();
   const [q, setQ] = useState("");
-  const { goals, subGoals, tasks } = state;
+  const activeGoals = state.goals.filter(g => g.status !== "archived");
+  const activeSubGoals = state.subGoals.filter(s => activeGoals.some(g => g.id === s.goalId));
+  const activeTasks = state.tasks.filter(tk => activeSubGoals.some(s => s.id === tk.subGoalId));
+
+  const goals = activeGoals;
+  const subGoals = activeSubGoals;
+  const tasks = activeTasks;
 
   const results = useMemo(() => {
     if (!q.trim()) return null;

@@ -29,6 +29,38 @@ export function reducer(state, action) {
         subGoals: state.subGoals.filter(s => s.id !== action.id),
         tasks:    state.tasks.filter(t => t.subGoalId !== action.id),
       };
+    case "ARCHIVE_GOAL":
+      return {
+        ...state,
+        goals: state.goals.map(g => g.id === action.id ? { ...g, status: "archived" } : g)
+      };
+    case "UNARCHIVE_GOAL":
+      return {
+        ...state,
+        goals: state.goals.map(g => g.id === action.id ? { ...g, status: "active" } : g)
+      };
+    case "ADD_WATCH_LATER":
+      return {
+        ...state,
+        watchLater: [...(state.watchLater || []), action.item]
+      };
+    case "DELETE_WATCH_LATER":
+      return {
+        ...state,
+        watchLater: (state.watchLater || []).filter(item => item.id !== action.id)
+      };
+    case "ADD_WATCH_LATER_CATEGORY":
+      if ((state.watchLaterCategories || []).includes(action.category)) return state;
+      return {
+        ...state,
+        watchLaterCategories: [...(state.watchLaterCategories || []), action.category]
+      };
+    case "DELETE_WATCH_LATER_CATEGORY":
+      return {
+        ...state,
+        watchLaterCategories: (state.watchLaterCategories || []).filter(c => c !== action.category),
+        watchLater: (state.watchLater || []).filter(item => item.category !== action.category)
+      };
     default: return state;
   }
 }

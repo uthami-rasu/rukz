@@ -12,7 +12,14 @@ import PriorityChip from "../components/ui/PriorityChip";
 
 export default function DashboardScreen({ state, setTab, setShowSettings, handleDownloadTemplate, navigate }) {
   const t = useTheme();
-  const { goals, subGoals, tasks } = state;
+  const activeGoals = state.goals.filter(g => g.status !== "archived");
+  const activeSubGoals = state.subGoals.filter(s => activeGoals.some(g => g.id === s.goalId));
+  const activeTasks = state.tasks.filter(tk => activeSubGoals.some(s => s.id === tk.subGoalId));
+
+  const goals = activeGoals;
+  const subGoals = activeSubGoals;
+  const tasks = activeTasks;
+
   const total   = tasks.length;
   const done    = tasks.filter(x => x.status === "completed").length;
   const overall = pct(done, total);
@@ -39,7 +46,7 @@ export default function DashboardScreen({ state, setTab, setShowSettings, handle
 
         <Text style={{ fontSize: 28, fontWeight: "900", color: t.labelPrimary, textAlign: "center", letterSpacing: -1, marginBottom: 10, textTransform: "uppercase" }}>
           Welcome to{" "}
-          <Text style={{ fontFamily: "Caveat_700Bold", fontSize: 36, letterSpacing: 0, textTransform: "none", color: t.blue }}>Rukz</Text>
+          <Text style={{ fontFamily: "Caveat_700Bold", fontWeight: "normal", fontSize: 36, letterSpacing: 0, textTransform: "none", color: t.blue }}>Rukz</Text>
         </Text>
         <Text style={{ fontSize: 15, color: t.inkThird, textAlign: "center", lineHeight: 24, marginBottom: 36, maxWidth: 280 }}>
           Your personal command centre for life goals. Start by creating your first goal.

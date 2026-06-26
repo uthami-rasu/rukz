@@ -6,12 +6,24 @@ export const SEED = {
   goals: [],
   subGoals: [],
   tasks: [],
+  watchLater: [],
+  watchLaterCategories: ["YouTube", "Instagram", "Tutorials", "Articles", "Other"],
 };
 
 export const loadLocalData = async () => {
   try {
     const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
-    return jsonValue != null ? JSON.parse(jsonValue) : SEED;
+    if (jsonValue != null) {
+      const parsed = JSON.parse(jsonValue);
+      return {
+        goals: parsed.goals || [],
+        subGoals: parsed.subGoals || [],
+        tasks: parsed.tasks || [],
+        watchLater: parsed.watchLater || [],
+        watchLaterCategories: parsed.watchLaterCategories || ["YouTube", "Instagram", "Tutorials", "Articles", "Other"],
+      };
+    }
+    return SEED;
   } catch (e) {
     console.error("Failed to load local data:", e);
     return SEED;

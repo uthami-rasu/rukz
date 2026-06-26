@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform } from "react-native";
 import { ListTodo, AlignLeft, Clock, Flag, Plus, Check, Trash2, Pencil } from "lucide-react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTheme } from "../context/ThemeContext";
 import { pct } from "../utils/helpers";
 import ProgressRing from "../components/ui/ProgressRing";
@@ -25,9 +26,17 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
   const [showAdd,  setShowAdd]  = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editTask, setEditTask] = useState(null);
+  
   const [form,     setForm]     = useState({ name: "", notes: "", dueDate: "", priority: "Medium" });
   const [editForm, setEditForm] = useState({ name: "", notes: "", dueDate: "", priority: "Medium" });
   const [filter,   setFilter]   = useState("all");
+
+  // Date picker states
+  const [showAddDatePicker, setShowAddDatePicker] = useState(false);
+  const [addPickerDate, setAddPickerDate] = useState(new Date());
+
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  const [editPickerDate, setEditPickerDate] = useState(new Date());
 
   const sorted = [...sgTasks]
     .filter(tk => filter === "all" || tk.status === filter)
@@ -43,6 +52,12 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
   function openEdit(tk) {
     setEditTask(tk);
     setEditForm({ name: tk.name, notes: tk.notes || "", dueDate: tk.dueDate || "", priority: tk.priority || "Medium" });
+    if (tk.dueDate) {
+      const parsedDate = new Date(tk.dueDate);
+      if (!isNaN(parsedDate.getTime())) {
+        setEditPickerDate(parsedDate);
+      }
+    }
     setShowEdit(true);
   }
 
@@ -52,6 +67,22 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
     setShowEdit(false);
     setEditTask(null);
   }
+
+  const handleAddDateChange = (event, selectedDate) => {
+    setShowAddDatePicker(false);
+    if (selectedDate) {
+      setAddPickerDate(selectedDate);
+      setForm({ ...form, dueDate: selectedDate.toISOString().slice(0, 10) });
+    }
+  };
+
+  const handleEditDateChange = (event, selectedDate) => {
+    setShowEditDatePicker(false);
+    if (selectedDate) {
+      setEditPickerDate(selectedDate);
+      setEditForm({ ...editForm, dueDate: selectedDate.toISOString().slice(0, 10) });
+    }
+  };
 
   return (
     <ScrollView
@@ -80,15 +111,15 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
           ) : null}
           <View style={{ flexDirection: "row", gap: 0 }}>
             {[
-              { v: sgTasks.length, l: "Total", c: t.blue },
+              { v: sgTasks.length, l: "Tasks", c: t.labelPrimary },
               { v: done,           l: "Done",  c: t.green },
-              { v: sgTasks.length - done, l: "Left", c: t.amber },
+              { v: sgTasks.length - done, l: "Left",  c: t.amber },
             ].map(({ v, l, c }, i) => (
               <React.Fragment key={l}>
                 {i > 0 && <View style={{ width: 1, backgroundColor: t.separator, marginHorizontal: 16 }} />}
                 <View style={{ alignItems: "center" }}>
-                  <Text style={{ fontSize: 24, fontWeight: "900", color: c, letterSpacing: -1 }}>{v}</Text>
-                  <Text style={{ fontSize: 11, color: t.inkThird, fontWeight: "800", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{l}</Text>
+                  <Text style={{ fontSize: 22, fontWeight: "900", color: c, letterSpacing: -1 }}>{v}</Text>
+                  <Text style={{ fontSize: 10, color: t.inkThird, fontWeight: "800", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{l}</Text>
                 </View>
               </React.Fragment>
             ))}
@@ -96,82 +127,69 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
         </View>
       </View>
 
-      {/* ── Filter ── */}
+      {/* Filter Segmented Control */}
       <SegmentedControl
-        options={[{ value: "all", label: "All" }, { value: "pending", label: "Pending" }, { value: "completed", label: "Done" }]}
-        value={filter} onChange={setFilter}
+        options={[
+          { label: "All Tasks", value: "all" },
+          { label: "Pending",   value: "pending" },
+          { label: "Completed", value: "completed" },
+        ]}
+        value={filter}
+        onChange={setFilter}
       />
 
-      {/* ── Task list ── */}
+      {/* ── Tasks ── */}
       <View style={[{
         backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
         borderRadius: 16, overflow: "hidden",
         borderWidth: 1.5, borderColor: t.border,
-        marginBottom: 8,
       }, t.shadow]}>
-        {sorted.length === 0 && (
-          <View style={{ paddingVertical: 36, alignItems: "center", gap: 10 }}>
-            <View style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: t.isDark ? "#222228" : "#E4ECE7", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: t.border }}>
-              <ListTodo size={24} color={t.blue} strokeWidth={2.5} />
-            </View>
-            <Text style={{ color: t.labelPrimary, fontSize: 14, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>No tasks yet</Text>
-            <Text style={{ color: t.inkThird, fontSize: 12, fontWeight: "500" }}>Tap "New Task" to add one</Text>
-          </View>
-        )}
-
         {sorted.map((tk, i) => {
-          const isComplete = tk.status === "completed";
+          const isCompleted = tk.status === "completed";
           return (
             <View key={tk.id}>
               <TouchableOpacity
                 activeOpacity={0.7}
-                onLongPress={() => openEdit(tk)}
                 onPress={() => dispatch({ type: "TOGGLE_TASK", id: tk.id })}
-                style={{
-                  paddingVertical: 18, paddingHorizontal: 18,
-                  flexDirection: "row", alignItems: "center", gap: 14,
-                  opacity: isComplete ? 0.6 : 1,
-                }}
+                style={{ paddingVertical: 18, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 14, opacity: isCompleted ? 0.65 : 1 }}
               >
-                {/* Checkbox */}
-                <TouchableOpacity
-                  onPress={() => dispatch({ type: "TOGGLE_TASK", id: tk.id })}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{
-                    width: 28, height: 28, borderRadius: 8, // Changed to matching soft box checkbox radius of 8 instead of circular
-                    borderWidth: 2,
-                    borderColor: isComplete ? t.green : t.border,
-                    backgroundColor: isComplete ? t.green : "transparent",
-                    alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  {isComplete && <Check size={14} color="#fff" strokeWidth={3} />}
-                </TouchableOpacity>
+                {/* Circle Checkbox */}
+                <View style={{
+                  width: 24, height: 24, borderRadius: 12,
+                  borderWidth: 2,
+                  borderColor: isCompleted ? t.green : t.border,
+                  backgroundColor: isCompleted ? t.green : "transparent",
+                  alignItems: "center", justifyContent: "center",
+                }}>
+                  {isCompleted && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                </View>
 
-                {/* Content */}
+                {/* Details */}
                 <View style={{ flex: 1 }}>
                   <Text style={{
-                    fontSize: 16, fontWeight: isComplete ? "500" : "700",
-                    color: isComplete ? t.inkThird : t.labelPrimary,
-                    textDecorationLine: isComplete ? "line-through" : "none",
-                    letterSpacing: -0.2, marginBottom: tk.notes ? 3 : 0,
+                    fontSize: 15,
+                    fontWeight: isCompleted ? "600" : "800",
+                    color: isCompleted ? t.inkThird : t.labelPrimary,
+                    textDecorationLine: isCompleted ? "line-through" : "none",
+                    letterSpacing: -0.2,
                   }}>{tk.name}</Text>
                   {tk.notes ? (
-                    <Text numberOfLines={1} style={{ fontSize: 13, color: t.inkThird, marginBottom: 4, fontWeight: "500" }}>{tk.notes}</Text>
+                    <Text style={{ fontSize: 12, color: t.inkThird, marginTop: 4, lineHeight: 16 }}>{tk.notes}</Text>
                   ) : null}
-                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+
+                  <View style={{ flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 }}>
                     <PriorityChip priority={tk.priority} />
                     {tk.dueDate ? (
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                         <Clock size={11} color={t.inkThird} />
-                        <Text style={{ fontSize: 12, color: t.inkThird, fontWeight: "500" }}>{tk.dueDate}</Text>
+                        <Text style={{ fontSize: 11, color: t.inkThird, fontWeight: "600" }}>{tk.dueDate}</Text>
                       </View>
                     ) : null}
                   </View>
                 </View>
 
                 {/* Actions */}
-                <View style={{ flexDirection: "row", gap: 2 }}>
+                <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
                   <TouchableOpacity
                     onPress={() => openEdit(tk)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
@@ -203,7 +221,57 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
       <Sheet title="New Task" visible={showAdd} onClose={() => setShowAdd(false)}>
         <AppleInput autoFocus label="Task Name" icon={ListTodo} placeholder="e.g. Learn Helm" value={form.name} onChangeText={v => setForm({ ...form, name: v })} />
         <AppleInput label="Notes" icon={AlignLeft} placeholder="Optional details" value={form.notes} onChangeText={v => setForm({ ...form, notes: v })} />
-        <AppleInput label="Due Date" icon={Clock} placeholder="YYYY-MM-DD" value={form.dueDate} onChangeText={v => setForm({ ...form, dueDate: v })} />
+        
+        {/* Date Picker for Task Due Date */}
+        <Text style={{ fontSize: 11, fontWeight: "800", color: t.inkThird, marginBottom: 8, paddingLeft: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Due Date
+        </Text>
+        {Platform.OS === "ios" ? (
+          <View style={{
+            backgroundColor: t.isDark ? "#222228" : "#FFFFFF",
+            borderRadius: 14, borderWidth: 1.5, borderColor: t.border,
+            padding: 10, alignItems: "center", marginBottom: 16
+          }}>
+            <DateTimePicker
+              value={addPickerDate}
+              mode="date"
+              display="default"
+              themeVariant={t.isDark ? "dark" : "light"}
+              onChange={(event, d) => {
+                if (d) {
+                  setAddPickerDate(d);
+                  setForm({ ...form, dueDate: d.toISOString().slice(0, 10) });
+                }
+              }}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setShowAddDatePicker(true)}
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: t.isDark ? "#222228" : "#FFFFFF",
+              borderRadius: 14, borderWidth: 1.5, borderColor: t.border,
+              paddingVertical: 15, paddingHorizontal: 16, marginBottom: 16,
+              flexDirection: "row", alignItems: "center", gap: 10
+            }}
+          >
+            <Clock size={16} color={t.labelSecondary} strokeWidth={2.5} />
+            <Text style={{ fontSize: 15, fontWeight: "600", color: form.dueDate ? t.labelPrimary : t.inkThird }}>
+              {form.dueDate || "Select Due Date"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {showAddDatePicker && Platform.OS !== "ios" && (
+          <DateTimePicker
+            value={addPickerDate}
+            mode="date"
+            display="default"
+            onChange={handleAddDateChange}
+          />
+        )}
+
         <AppleSelect label="Priority" icon={Flag} value={form.priority} options={["Low", "Medium", "High"]} onChange={val => setForm({ ...form, priority: val })} />
         <SheetBtn onClick={add} icon={Plus}>Add Task</SheetBtn>
       </Sheet>
@@ -211,7 +279,57 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
       <Sheet title="Edit Task" visible={showEdit} onClose={() => { setShowEdit(false); setEditTask(null); }}>
         <AppleInput autoFocus label="Task Name" icon={ListTodo} placeholder="Task name" value={editForm.name} onChangeText={v => setEditForm({ ...editForm, name: v })} />
         <AppleInput label="Notes" icon={AlignLeft} placeholder="Optional details" value={editForm.notes} onChangeText={v => setEditForm({ ...editForm, notes: v })} />
-        <AppleInput label="Due Date" icon={Clock} placeholder="YYYY-MM-DD" value={editForm.dueDate} onChangeText={v => setEditForm({ ...editForm, dueDate: v })} />
+        
+        {/* Date Picker for Edit Task Due Date */}
+        <Text style={{ fontSize: 11, fontWeight: "800", color: t.inkThird, marginBottom: 8, paddingLeft: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Due Date
+        </Text>
+        {Platform.OS === "ios" ? (
+          <View style={{
+            backgroundColor: t.isDark ? "#222228" : "#FFFFFF",
+            borderRadius: 14, borderWidth: 1.5, borderColor: t.border,
+            padding: 10, alignItems: "center", marginBottom: 16
+          }}>
+            <DateTimePicker
+              value={editPickerDate}
+              mode="date"
+              display="default"
+              themeVariant={t.isDark ? "dark" : "light"}
+              onChange={(event, d) => {
+                if (d) {
+                  setEditPickerDate(d);
+                  setEditForm({ ...editForm, dueDate: d.toISOString().slice(0, 10) });
+                }
+              }}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setShowEditDatePicker(true)}
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: t.isDark ? "#222228" : "#FFFFFF",
+              borderRadius: 14, borderWidth: 1.5, borderColor: t.border,
+              paddingVertical: 15, paddingHorizontal: 16, marginBottom: 16,
+              flexDirection: "row", alignItems: "center", gap: 10
+            }}
+          >
+            <Clock size={16} color={t.labelSecondary} strokeWidth={2.5} />
+            <Text style={{ fontSize: 15, fontWeight: "600", color: editForm.dueDate ? t.labelPrimary : t.inkThird }}>
+              {editForm.dueDate || "Select Due Date"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {showEditDatePicker && Platform.OS !== "ios" && (
+          <DateTimePicker
+            value={editPickerDate}
+            mode="date"
+            display="default"
+            onChange={handleEditDateChange}
+          />
+        )}
+
         <AppleSelect label="Priority" icon={Flag} value={editForm.priority} options={["Low", "Medium", "High"]} onChange={val => setEditForm({ ...editForm, priority: val })} />
         <SheetBtn onClick={saveEdit} icon={Check}>Save Changes</SheetBtn>
       </Sheet>
