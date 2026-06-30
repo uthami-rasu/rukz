@@ -111,13 +111,14 @@ async function scheduleMorningVibes(state) {
       triggerDate.setDate(now.getDate() + i);
       triggerDate.setHours(8, 0, 0, 0);
 
+      // Days left in the year
       const year = triggerDate.getFullYear();
       const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
       const diffTime = endOfYear.getTime() - triggerDate.getTime();
       const daysLeftVal = Math.max(0, Math.ceil(diffTime / 86400000));
 
       const quote = quotes[Math.floor(Math.random() * quotes.length)];
-      let bodyText = `✨ "${quote}"\nKeep going! You have ${pendingTasksCount} tasks pending and ${daysLeftVal} days left in ${year}.`;
+      let bodyText = `✨ "${quote}"\nKeep going! Only ${daysLeftVal} days left in ${year}. You have ${pendingTasksCount} tasks pending.`;
 
       await Notifications.scheduleNotificationAsync({
         identifier: `morning-vibe-${i}`,
