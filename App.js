@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity,
-  Platform, Alert, BackHandler,
+  Platform, Alert, BackHandler, Linking, LogBox,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -12,6 +12,15 @@ import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import * as XLSX from "xlsx";
 import { ChevronLeft, Sun, Moon, Share2, Download, Upload, User } from "lucide-react-native";
+import * as Notifications from "expo-notifications";
+import { useShareIntent } from "expo-share-intent";
+import { formatDateString } from "./src/utils/helpers";
+
+// Suppress hardcoded Expo Go notifications warnings in console
+LogBox.ignoreLogs([
+  "expo-notifications: Android Push notifications",
+  "`expo-notifications` functionality is not fully supported in Expo Go",
+]);
 
 // Context & theme
 import { ThemeCtx, makeTheme } from "./src/context/ThemeContext";
@@ -39,6 +48,96 @@ import SearchScreen       from "./src/screens/SearchScreen";
 import WatchLaterScreen   from "./src/screens/WatchLaterScreen";
 import StatisticsScreen   from "./src/screens/StatisticsScreen";
 
+// Register Notification Categories (Snooze & Turn Off actions)
+if (Platform.OS !== "web") {
+  Notifications.setNotificationCategoryAsync("watch-later-reminder", [
+    {
+      identifier: "snooze-10m",
+      buttonTitle: "Snooze 10 Min",
+      options: { opensAppToForeground: true }
+    },
+    {
+      identifier: "snooze-1h",
+      buttonTitle: "Snooze 1 Hour",
+      options: { opensAppToForeground: true }
+    },
+    {
+      identifier: "turn-off",
+      buttonTitle: "Turn Off",
+      options: { opensAppToForeground: true, isDestructive: true }
+    }
+  ]);
+}
+
+async function scheduleMorningVibes(state) {
+  if (Platform.OS === "web") return;
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") return;
+
+    // 1. Cancel previous morning-vibe notifications
+    const allScheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notif of allScheduled) {
+      if (notif.identifier && notif.identifier.startsWith("morning-vibe-")) {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+      }
+    }
+
+    // 2. Schedule for the next 7 days
+    const now = new Date();
+    const quotes = [
+      "Believe you can and you're halfway there.",
+      "Act as if what you do makes a difference. It does.",
+      "Success is not final, failure is not fatal: it is the courage to continue that counts.",
+      "Never bend your head. Always hold it high.",
+      "What you get by achieving your goals is not as important as what you become.",
+      "Make each day your masterpiece.",
+      "The only limit to our realization of tomorrow will be our doubts of today.",
+      "You are never too old to set another goal or to dream a new dream.",
+      "Keep your face always toward the sunshine—and shadows will fall behind you.",
+      "The best way to predict the future is to create it.",
+      "Do what you can, with what you have, where you are.",
+      "You don't have to be great to start, but you have to start to be great.",
+      "Be so good they can't ignore you."
+    ];
+
+    const activeGoals = state.goals ? state.goals.filter(g => g.status !== "archived") : [];
+    const activeSubGoals = state.subGoals ? state.subGoals.filter(s => activeGoals.some(g => g.id === s.goalId)) : [];
+    const activeTasks = state.tasks ? state.tasks.filter(tk => activeSubGoals.some(s => s.id === tk.subGoalId)) : [];
+    const pendingTasksCount = activeTasks.filter(tk => tk.status !== "completed").length;
+
+    for (let i = 1; i <= 7; i++) {
+      const triggerDate = new Date();
+      triggerDate.setDate(now.getDate() + i);
+      triggerDate.setHours(8, 0, 0, 0);
+
+      const year = triggerDate.getFullYear();
+      const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
+      const diffTime = endOfYear.getTime() - triggerDate.getTime();
+      const daysLeftVal = Math.max(0, Math.ceil(diffTime / 86400000));
+
+      const quote = quotes[Math.floor(Math.random() * quotes.length)];
+      let bodyText = `✨ "${quote}"\nKeep going! You have ${pendingTasksCount} tasks pending and ${daysLeftVal} days left in ${year}.`;
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: `morning-vibe-${i}`,
+        content: {
+          title: `🌅 Good Morning!`,
+          body: bodyText,
+          sound: true,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: triggerDate,
+          channelId: "default",
+        },
+      });
+    }
+  } catch (e) {
+    console.warn("Error scheduling morning vibes:", e);
+  }
+}
+
 export default function App() {
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [dark, setDark]           = useState(true);
@@ -48,8 +147,25 @@ export default function App() {
   const [stack, setStack]         = useState([]);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Share Intent state
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+  const [sharedUrlToPreFill, setSharedUrlToPreFill] = useState("");
+
   useEffect(() => {
-    loadLocalData().then(data => setAppState(data));
+    // Configure default Android notification channel for local alerts
+    if (Platform.OS === "android") {
+      Notifications.setNotificationChannelAsync("default", {
+        name: "Default",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#FF231F77",
+      }).catch(err => console.warn("Failed to set notification channel:", err));
+    }
+
+    loadLocalData().then(data => {
+      setAppState(data);
+      scheduleMorningVibes(data);
+    });
   }, []);
 
   useEffect(() => {
@@ -60,10 +176,84 @@ export default function App() {
     return () => sub.remove();
   }, [stack]);
 
+  // Handle incoming Share Intent
+  useEffect(() => {
+    if (hasShareIntent && shareIntent && shareIntent.value) {
+      const val = shareIntent.value;
+      const match = val.match(/https?:\/\/[^\s]+/);
+      const url = match ? match[0] : val;
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        setSharedUrlToPreFill(url);
+        setTab("watchLater");
+        setStack([]);
+      }
+      resetShareIntent();
+    }
+  }, [hasShareIntent, shareIntent]);
+
+  // Handle Interactive Notification Responses (Snooze / Turn Off actions)
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const subscription = Notifications.addNotificationResponseReceivedListener(async response => {
+      const { actionIdentifier, notification } = response;
+      const { data } = notification.request.content;
+
+      if (data && data.url) {
+        if (actionIdentifier === "snooze-10m" || actionIdentifier === "snooze-1h") {
+          const minutes = actionIdentifier === "snooze-10m" ? 10 : 60;
+          const newDate = new Date(Date.now() + minutes * 60 * 1000);
+          const checkTimeString = formatDateString(newDate);
+
+          dispatch({
+            type: "UPDATE_WATCH_LATER",
+            item: { id: data.itemId, checkTime: checkTimeString, reminderEnabled: true }
+          });
+
+          const newReminderId = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `🔔 Watch Later Reminder (Snoozed)`,
+              body: `${data.category}: ${data.itemTitle || data.url}`,
+              categoryIdentifier: "watch-later-reminder",
+              data: data,
+              sound: true,
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DATE,
+              date: newDate,
+              channelId: "default",
+            },
+          });
+
+          dispatch({
+            type: "UPDATE_WATCH_LATER",
+            item: { id: data.itemId, reminderId: newReminderId }
+          });
+
+          Alert.alert("Snoozed", `Reminder snoozed for ${minutes} minutes.`);
+        } else if (actionIdentifier === "turn-off") {
+          dispatch({
+            type: "UPDATE_WATCH_LATER",
+            item: { id: data.itemId, reminderEnabled: false }
+          });
+          Alert.alert("Reminder Off", "Reminders turned off for this item.");
+        } else {
+          let targetUrl = data.url.trim();
+          if (!/^https?:\/\//i.test(targetUrl)) {
+            targetUrl = "https://" + targetUrl;
+          }
+          Linking.openURL(targetUrl).catch(err => console.error("Couldn't open link", err));
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [appState]);
+
   const dispatch = action => {
     setAppState(s => {
       const next = reducer(s, action);
       saveLocalData(next);
+      scheduleMorningVibes(next);
       return next;
     });
   };
@@ -303,7 +493,15 @@ export default function App() {
       case "dashboard": return <DashboardScreen state={appState} setTab={setTab} setShowSettings={setShowSettings} handleDownloadTemplate={handleDownloadTemplate} navigate={navigate} />;
       case "goals":     return <GoalsScreen     state={appState} dispatch={dispatch} navigate={navigate} />;
       case "search":    return <SearchScreen    state={appState} navigate={navigate} />;
-      case "watchLater": return <WatchLaterScreen state={appState} dispatch={dispatch} />;
+      case "watchLater":
+        return (
+          <WatchLaterScreen
+            state={appState}
+            dispatch={dispatch}
+            sharedUrlToPreFill={sharedUrlToPreFill}
+            clearSharedUrlToPreFill={() => setSharedUrlToPreFill("")}
+          />
+        );
       case "stats":     return <StatisticsScreen state={appState} />;
     }
   }

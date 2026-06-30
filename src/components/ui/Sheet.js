@@ -71,7 +71,7 @@ export default function Sheet({ title, visible, onClose, children }) {
 
           <ScrollView
             contentContainerStyle={{ padding: 20, paddingBottom: 36 }}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >

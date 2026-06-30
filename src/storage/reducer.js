@@ -44,17 +44,25 @@ export function reducer(state, action) {
         ...state,
         watchLater: [...(state.watchLater || []), action.item]
       };
+    case "UPDATE_WATCH_LATER":
+      return {
+        ...state,
+        watchLater: (state.watchLater || []).map(item => item.id === action.item.id ? { ...item, ...action.item } : item)
+      };
     case "DELETE_WATCH_LATER":
       return {
         ...state,
         watchLater: (state.watchLater || []).filter(item => item.id !== action.id)
       };
-    case "ADD_WATCH_LATER_CATEGORY":
-      if ((state.watchLaterCategories || []).includes(action.category)) return state;
+    case "ADD_WATCH_LATER_CATEGORY": {
+      const currentCats = state.watchLaterCategories || ["YouTube", "Instagram", "Tutorials", "Articles", "Other"];
+      const cleaned = action.category.trim();
+      if (currentCats.some(c => c.toLowerCase() === cleaned.toLowerCase())) return state;
       return {
         ...state,
-        watchLaterCategories: [...(state.watchLaterCategories || []), action.category]
+        watchLaterCategories: [cleaned, ...currentCats]
       };
+    }
     case "DELETE_WATCH_LATER_CATEGORY":
       return {
         ...state,
