@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Linking, Image, Platform, TextInput, AppState } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Linking, Image, Platform, TextInput, AppState, Alert } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Notifications from "expo-notifications";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -260,14 +260,30 @@ export default function WatchLaterScreen({ state, dispatch, sharedUrlToPreFill, 
   };
 
   const handleDeleteItem = async (item) => {
-    if (item.reminderId) {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(item.reminderId);
-      } catch (e) {
-        console.warn("Could not cancel notification:", e);
-      }
-    }
-    dispatch({ type: "DELETE_WATCH_LATER", id: item.id });
+    Alert.alert(
+      "Delete Link",
+      "Are you sure you want to delete this watch later link? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (item.reminderId) {
+              try {
+                await Notifications.cancelScheduledNotificationAsync(item.reminderId);
+              } catch (e) {
+                console.warn("Could not cancel notification:", e);
+              }
+            }
+            dispatch({ type: "DELETE_WATCH_LATER", id: item.id });
+          }
+        }
+      ]
+    );
   };
 
   const handleEditItem = (item) => {
@@ -448,8 +464,8 @@ export default function WatchLaterScreen({ state, dispatch, sharedUrlToPreFill, 
               flexDirection: "row", alignItems: "center", gap: 6
             }}
           >
-            <Plus size={13} color={t.labelPrimary} strokeWidth={3} />
-            <Text style={{ fontSize: 13, fontWeight: "800", color: t.labelPrimary }}>CATEGORY</Text>
+            <Pencil size={13} color={t.labelPrimary} strokeWidth={2.5} />
+            <Text style={{ fontSize: 13, fontWeight: "800", color: t.labelPrimary }}>MANAGE</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -809,25 +825,59 @@ export default function WatchLaterScreen({ state, dispatch, sharedUrlToPreFill, 
                     .filter(c => c.toLowerCase().includes(catSearch.toLowerCase()))
                     .map(c => {
                       const isSelected = category === c;
+                      const isDefault = ["YouTube", "Instagram", "Tutorials", "Articles", "Other"].includes(c);
                       return (
-                        <TouchableOpacity
+                        <View
                           key={c}
-                          onPress={() => {
-                            setCategory(c);
-                            setCatSearch("");
-                            setShowCatDropdown(false);
-                          }}
-                          activeOpacity={0.7}
                           style={{
-                            paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
+                            flexDirection: "row",
+                            alignItems: "center",
                             backgroundColor: isSelected ? t.blue : (t.isDark ? "#222228" : "#FFFFFF"),
-                            borderWidth: 1.5, borderColor: isSelected ? t.blue : t.border,
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? t.blue : t.border,
+                            borderRadius: 10,
+                            paddingLeft: 12,
+                            paddingRight: 6,
+                            paddingVertical: 6,
+                            gap: 8
                           }}
                         >
-                          <Text style={{ fontSize: 13, fontWeight: "800", color: isSelected ? "#FFFFFF" : t.labelPrimary }}>
-                            {c.toUpperCase()}
-                          </Text>
-                        </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setCategory(c);
+                              setCatSearch("");
+                              setShowCatDropdown(false);
+                            }}
+                            activeOpacity={0.7}
+                            style={{ paddingVertical: 4 }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: "800", color: isSelected ? "#FFFFFF" : t.labelPrimary }}>
+                              {c.toUpperCase()}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {!isDefault && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                dispatch({ type: "DELETE_WATCH_LATER_CATEGORY", category: c });
+                                if (category === c) {
+                                  setCategory("Other");
+                                }
+                              }}
+                              activeOpacity={0.7}
+                              style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 5,
+                                backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : (t.isDark ? "#1C1C24" : "#F2F2F7"),
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Trash2 size={11} color={isSelected ? "#FFFFFF" : t.red} strokeWidth={2.5} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       );
                     })}
                 </View>

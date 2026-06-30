@@ -54,17 +54,17 @@ if (Platform.OS !== "web") {
     {
       identifier: "snooze-10m",
       buttonTitle: "Snooze 10 Min",
-      options: { opensAppToForeground: true }
+      options: { opensAppToForeground: false }
     },
     {
       identifier: "snooze-1h",
       buttonTitle: "Snooze 1 Hour",
-      options: { opensAppToForeground: true }
+      options: { opensAppToForeground: false }
     },
     {
       identifier: "turn-off",
       buttonTitle: "Turn Off",
-      options: { opensAppToForeground: true, isDestructive: true }
+      options: { opensAppToForeground: false, isDestructive: true }
     }
   ]);
 }
@@ -229,13 +229,11 @@ export default function App() {
             item: { id: data.itemId, reminderId: newReminderId }
           });
 
-          Alert.alert("Snoozed", `Reminder snoozed for ${minutes} minutes.`);
         } else if (actionIdentifier === "turn-off") {
           dispatch({
             type: "UPDATE_WATCH_LATER",
             item: { id: data.itemId, reminderEnabled: false }
           });
-          Alert.alert("Reminder Off", "Reminders turned off for this item.");
         } else {
           let targetUrl = data.url.trim();
           if (!/^https?:\/\//i.test(targetUrl)) {
@@ -630,14 +628,30 @@ export default function App() {
               </TouchableOpacity>
             </GroupCard>
 
-            <SectionHeader>Backup & Data Migration</SectionHeader>
+            <SectionHeader>Backup & Sync (Google Drive / iCloud)</SectionHeader>
             <Text style={{ fontSize: 13, color: theme.inkThird, lineHeight: 18, paddingHorizontal: 4 }}>
-              Since this app is entirely backend-free, your data is saved only on this phone. Export your data to transfer it to another device or save a backup.
+              Since this app is entirely backend-free, your data is saved only on this phone. You can backup and restore your database using Google Drive, iCloud, or local storage.
             </Text>
+
+            <View style={{
+              backgroundColor: theme.isDark ? "#222228" : "#E4ECE7",
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1.5,
+              borderColor: theme.border,
+              marginBottom: 4
+            }}>
+              <Text style={{ fontSize: 12, color: theme.labelPrimary, fontWeight: "600", lineHeight: 18 }}>
+                💡 <Text style={{ fontWeight: "800" }}>Sync via Google Drive:</Text>{"\n"}
+                1. Tap <Text style={{ fontWeight: "800", color: theme.blue }}>Cloud Backup</Text> below and select "Save to Drive" (Google Drive).{"\n"}
+                2. Tap <Text style={{ fontWeight: "800", color: theme.green }}>Restore Backup</Text> and choose the backup file from Google Drive to sync your data.
+              </Text>
+            </View>
+
             <GroupCard>
               {[
-                { label: "Export Data",          sub: "Save or share your backup JSON file",        icon: Share2,   color: theme.blue,   onPress: handleExport         },
-                { label: "Import JSON",           sub: "Restore or sync data from a JSON file",     icon: Download, color: theme.green,  onPress: handleImport         },
+                { label: "Cloud Backup",          sub: "Upload backup to Google Drive, iCloud, etc.", icon: Share2,   color: theme.blue,   onPress: handleExport         },
+                { label: "Restore Backup",        sub: "Sync from a Google Drive or iCloud backup file", icon: Download, color: theme.green,  onPress: handleImport         },
                 { label: "Upload Excel / CSV",    sub: "Bulk import goals, areas, and tasks",       icon: Upload,   color: theme.indigo, onPress: handleExcelImport    },
                 { label: "Download CSV Template", sub: "Get the sample structure for bulk uploads", icon: Download, color: theme.amber,  onPress: handleDownloadTemplate },
               ].map(({ label, sub, icon: Icon, color, onPress }, idx, arr) => (

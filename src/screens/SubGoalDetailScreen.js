@@ -85,137 +85,156 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ── Hero card ── */}
-      <View style={[{
-        backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
-        borderRadius: 16, padding: 22, marginBottom: 16,
-        borderWidth: 1.5, borderColor: t.border,
-        flexDirection: "row", alignItems: "center", gap: 20,
-      }, t.shadow]}>
-        {/* Ring */}
-        <View style={{ position: "relative" }}>
-          <ProgressRing value={sgPct} size={80} stroke={7} color={t.green} />
-          <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 17, fontWeight: "900", color: t.labelPrimary, letterSpacing: -0.5 }}>{sgPct}%</Text>
-          </View>
-        </View>
-
-        <View style={{ flex: 1 }}>
-          {sg.description ? (
-            <Text style={{ fontSize: 13, color: t.inkThird, marginBottom: 14, lineHeight: 19, fontWeight: "500" }}>{sg.description}</Text>
-          ) : null}
-          <View style={{ flexDirection: "row", gap: 0 }}>
-            {[
-              { v: sgTasks.length, l: "Tasks", c: t.labelPrimary },
-              { v: done,           l: "Done",  c: t.green },
-              { v: sgTasks.length - done, l: "Left",  c: t.amber },
-            ].map(({ v, l, c }, i) => (
-              <React.Fragment key={l}>
-                {i > 0 && <View style={{ width: 1, backgroundColor: t.separator, marginHorizontal: 16 }} />}
-                <View style={{ alignItems: "center" }}>
-                  <Text style={{ fontSize: 22, fontWeight: "900", color: c, letterSpacing: -1 }}>{v}</Text>
-                  <Text style={{ fontSize: 10, color: t.inkThird, fontWeight: "800", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{l}</Text>
-                </View>
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      {/* Filter Segmented Control */}
-      <SegmentedControl
-        options={[
-          { label: "All Tasks", value: "all" },
-          { label: "Pending",   value: "pending" },
-          { label: "Completed", value: "completed" },
-        ]}
-        value={filter}
-        onChange={setFilter}
-      />
-
-      {/* ── Tasks ── */}
-      <View style={[{
-        backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
-        borderRadius: 16, overflow: "hidden",
-        borderWidth: 1.5, borderColor: t.border,
-      }, t.shadow]}>
-        {sorted.map((tk, i) => {
-          const isCompleted = tk.status === "completed";
-          return (
-            <View key={tk.id}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => dispatch({ type: "TOGGLE_TASK", id: tk.id })}
-                style={{ paddingVertical: 18, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 14, opacity: isCompleted ? 0.65 : 1 }}
-              >
-                {/* Circle Checkbox */}
-                <View style={{
-                  width: 24, height: 24, borderRadius: 12,
-                  borderWidth: 2,
-                  borderColor: isCompleted ? t.green : t.border,
-                  backgroundColor: isCompleted ? t.green : "transparent",
-                  alignItems: "center", justifyContent: "center",
-                }}>
-                  {isCompleted && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
-                </View>
-
-                {/* Details */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontSize: 15,
-                    fontWeight: isCompleted ? "600" : "800",
-                    color: isCompleted ? t.inkThird : t.labelPrimary,
-                    textDecorationLine: isCompleted ? "line-through" : "none",
-                    letterSpacing: -0.2,
-                  }}>{tk.name}</Text>
-                  {tk.notes ? (
-                    <Text style={{ fontSize: 12, color: t.inkThird, marginTop: 4, lineHeight: 16 }}>{tk.notes}</Text>
-                  ) : null}
-
-                  <View style={{ flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 }}>
-                    <PriorityChip priority={tk.priority} />
-                    {tk.dueDate ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <Clock size={11} color={t.inkThird} />
-                        <Text style={{ fontSize: 11, color: t.inkThird, fontWeight: "600" }}>{tk.dueDate}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-
-                {/* Actions */}
-                <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-                  <TouchableOpacity
-                    onPress={() => openEdit(tk)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
-                    style={{ padding: 6, borderRadius: 8 }}
-                  >
-                    <Pencil size={15} color={t.inkThird} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => dispatch({ type: "DELETE_TASK", id: tk.id })}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-                    style={{ padding: 6, borderRadius: 8 }}
-                  >
-                    <Trash2 size={15} color={t.red} />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-              {i < sorted.length - 1 && (
-                <View style={{ height: 1, backgroundColor: t.separator, marginLeft: 60 }} />
-              )}
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Hero card ── */}
+        <View style={[{
+          backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
+          borderRadius: 16, padding: 22, marginBottom: 16,
+          borderWidth: 1.5, borderColor: t.border,
+          flexDirection: "row", alignItems: "center", gap: 20,
+        }, t.shadow]}>
+          {/* Ring */}
+          <View style={{ position: "relative" }}>
+            <ProgressRing value={sgPct} size={80} stroke={7} color={t.green} />
+            <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 17, fontWeight: "900", color: t.labelPrimary, letterSpacing: -0.5 }}>{sgPct}%</Text>
             </View>
-          );
-        })}
+          </View>
 
-        <View style={{ height: 1, backgroundColor: t.separator }} />
-        <NewItemRow label="New Task" onClick={() => setShowAdd(true)} />
-      </View>
+          <View style={{ flex: 1 }}>
+            {sg.description ? (
+              <Text style={{ fontSize: 13, color: t.inkThird, marginBottom: 14, lineHeight: 19, fontWeight: "500" }}>{sg.description}</Text>
+            ) : null}
+            <View style={{ flexDirection: "row", gap: 0 }}>
+              {[
+                { v: sgTasks.length, l: "Tasks", c: t.labelPrimary },
+                { v: done,           l: "Done",  c: t.green },
+                { v: sgTasks.length - done, l: "Left",  c: t.amber },
+              ].map(({ v, l, c }, i) => (
+                <React.Fragment key={l}>
+                  {i > 0 && <View style={{ width: 1, backgroundColor: t.separator, marginHorizontal: 16 }} />}
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={{ fontSize: 22, fontWeight: "900", color: c, letterSpacing: -1 }}>{v}</Text>
+                    <Text style={{ fontSize: 10, color: t.inkThird, fontWeight: "800", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{l}</Text>
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Filter Segmented Control */}
+        <SegmentedControl
+          options={[
+            { label: "All Tasks", value: "all" },
+            { label: "Pending",   value: "pending" },
+            { label: "Completed", value: "completed" },
+          ]}
+          value={filter}
+          onChange={setFilter}
+        />
+
+        {/* ── Tasks ── */}
+        <View style={[{
+          backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
+          borderRadius: 16, overflow: "hidden",
+          borderWidth: 1.5, borderColor: t.border,
+        }, t.shadow]}>
+          {sorted.map((tk, i) => {
+            const isCompleted = tk.status === "completed";
+            return (
+              <View key={tk.id}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => dispatch({ type: "TOGGLE_TASK", id: tk.id })}
+                  style={{ paddingVertical: 18, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 14, opacity: isCompleted ? 0.65 : 1 }}
+                >
+                  {/* Circle Checkbox */}
+                  <View style={{
+                    width: 24, height: 24, borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: isCompleted ? t.green : t.border,
+                    backgroundColor: isCompleted ? t.green : "transparent",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    {isCompleted && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                  </View>
+
+                  {/* Details */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontSize: 15,
+                      fontWeight: isCompleted ? "600" : "800",
+                      color: isCompleted ? t.inkThird : t.labelPrimary,
+                      textDecorationLine: isCompleted ? "line-through" : "none",
+                      letterSpacing: -0.2,
+                    }}>{tk.name}</Text>
+                    {tk.notes ? (
+                      <Text style={{ fontSize: 12, color: t.inkThird, marginTop: 4, lineHeight: 16 }}>{tk.notes}</Text>
+                    ) : null}
+
+                    <View style={{ flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 }}>
+                      <PriorityChip priority={tk.priority} />
+                      {tk.dueDate ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Clock size={11} color={t.inkThird} />
+                          <Text style={{ fontSize: 11, color: t.inkThird, fontWeight: "600" }}>{tk.dueDate}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Actions */}
+                  <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
+                    <TouchableOpacity
+                      onPress={() => openEdit(tk)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+                      style={{ padding: 6, borderRadius: 8 }}
+                    >
+                      <Pencil size={15} color={t.inkThird} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => dispatch({ type: "DELETE_TASK", id: tk.id })}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                      style={{ padding: 6, borderRadius: 8 }}
+                    >
+                      <Trash2 size={15} color={t.red} />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+                {i < sorted.length - 1 && (
+                  <View style={{ height: 1, backgroundColor: t.separator, marginLeft: 60 }} />
+                )}
+              </View>
+            );
+          })}
+
+          <View style={{ height: 1, backgroundColor: t.separator }} />
+          <NewItemRow label="New Task" onClick={() => setShowAdd(true)} />
+        </View>
+
+        {/* ── Delete ── */}
+        <TouchableOpacity
+          onPress={() => Alert.alert("Delete Focus Area", "Delete this area and all its tasks? This cannot be undone.", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Delete", style: "destructive", onPress: () => { dispatch({ type: "DELETE_SUBGOAL", id: sg.id }); goBack(); } },
+          ])}
+          style={{
+            marginTop: 20, padding: 18, borderRadius: 14,
+            backgroundColor: t.red + "12",
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+            borderWidth: 1.5, borderColor: t.red + "25",
+          }}
+        >
+          <Trash2 size={16} color={t.red} strokeWidth={2.5} />
+          <Text style={{ color: t.red, fontWeight: "800", fontSize: 15, textTransform: "uppercase", letterSpacing: 0.5 }}>Delete Focus Area</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       {/* ── Sheets ── */}
       <Sheet title="New Task" visible={showAdd} onClose={() => setShowAdd(false)}>
@@ -333,23 +352,6 @@ export default function SubGoalDetailScreen({ state, dispatch, params, goBack })
         <AppleSelect label="Priority" icon={Flag} value={editForm.priority} options={["Low", "Medium", "High"]} onChange={val => setEditForm({ ...editForm, priority: val })} />
         <SheetBtn onClick={saveEdit} icon={Check}>Save Changes</SheetBtn>
       </Sheet>
-
-      {/* ── Delete ── */}
-      <TouchableOpacity
-        onPress={() => Alert.alert("Delete Focus Area", "Delete this area and all its tasks? This cannot be undone.", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: () => { dispatch({ type: "DELETE_SUBGOAL", id: sg.id }); goBack(); } },
-        ])}
-        style={{
-          marginTop: 20, padding: 18, borderRadius: 14,
-          backgroundColor: t.red + "12",
-          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-          borderWidth: 1.5, borderColor: t.red + "25",
-        }}
-      >
-        <Trash2 size={16} color={t.red} strokeWidth={2.5} />
-        <Text style={{ color: t.red, fontWeight: "800", fontSize: 15, textTransform: "uppercase", letterSpacing: 0.5 }}>Delete Focus Area</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }

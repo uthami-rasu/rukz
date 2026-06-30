@@ -54,90 +54,92 @@ export default function GoalsScreen({ state, dispatch, navigate }) {
   });
 
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <SegmentedControl
-        options={[
-          { label: "Active Goals", value: "active" },
-          { label: "Archived", value: "archived" },
-        ]}
-        value={viewMode}
-        onChange={setViewMode}
-      />
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <SegmentedControl
+          options={[
+            { label: "Active Goals", value: "active" },
+            { label: "Archived", value: "archived" },
+          ]}
+          value={viewMode}
+          onChange={setViewMode}
+        />
 
-      <SectionHeader>{viewMode === "archived" ? "Archived Goals" : "Active Goals"}</SectionHeader>
+        <SectionHeader>{viewMode === "archived" ? "Archived Goals" : "Active Goals"}</SectionHeader>
 
-      <View style={[{
-        backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
-        borderRadius: 16, overflow: "hidden",
-        borderWidth: 1.5, borderColor: t.border,
-        marginBottom: 10,
-      }, t.shadow]}>
-        {filteredGoals.map((g, i) => {
-          const s     = stats(g);
-          const color = PALETTE[i % PALETTE.length];
-          return (
-            <View key={g.id}>
-              <TouchableOpacity
-                activeOpacity={0.65}
-                onPress={() => navigate("goalDetail", { goalId: g.id })}
-                style={{ paddingVertical: 20, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 14 }}
-              >
-                <View style={{
-                  width: 46, height: 46, borderRadius: 12,
-                  backgroundColor: viewMode === "archived" ? t.inkThird + "18" : color + "18",
-                  alignItems: "center", justifyContent: "center",
-                  borderWidth: 1, borderColor: viewMode === "archived" ? t.inkThird + "25" : color + "25",
-                }}>
-                  {viewMode === "archived" ? (
-                    <Archive size={20} color={t.inkThird} strokeWidth={2.5} />
-                  ) : (
-                    <Target size={20} color={color} strokeWidth={2.5} />
-                  )}
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                    <Text style={{ fontSize: 16, fontWeight: "700", color: t.labelPrimary, letterSpacing: -0.3 }}>{g.name}</Text>
-                    <Text style={{ fontSize: 13, fontWeight: "900", color: viewMode === "archived" ? t.inkThird : color }}>{s.p}%</Text>
+        <View style={[{
+          backgroundColor: t.isDark ? "#16161A" : "#FFFFFF",
+          borderRadius: 16, overflow: "hidden",
+          borderWidth: 1.5, borderColor: t.border,
+          marginBottom: 10,
+        }, t.shadow]}>
+          {filteredGoals.map((g, i) => {
+            const s     = stats(g);
+            const color = PALETTE[i % PALETTE.length];
+            return (
+              <View key={g.id}>
+                <TouchableOpacity
+                  activeOpacity={0.65}
+                  onPress={() => navigate("goalDetail", { goalId: g.id })}
+                  style={{ paddingVertical: 20, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", gap: 14 }}
+                >
+                  <View style={{
+                    width: 46, height: 46, borderRadius: 12,
+                    backgroundColor: viewMode === "archived" ? t.inkThird + "18" : color + "18",
+                    alignItems: "center", justifyContent: "center",
+                    borderWidth: 1, borderColor: viewMode === "archived" ? t.inkThird + "25" : color + "25",
+                  }}>
+                    {viewMode === "archived" ? (
+                      <Archive size={20} color={t.inkThird} strokeWidth={2.5} />
+                    ) : (
+                      <Target size={20} color={color} strokeWidth={2.5} />
+                    )}
                   </View>
-                  {g.description ? (
-                    <Text numberOfLines={1} style={{ fontSize: 13, color: t.inkThird, marginBottom: 8, lineHeight: 18, fontWeight: "500" }}>{g.description}</Text>
-                  ) : null}
-                  <ProgressBar value={s.p} color={viewMode === "archived" ? t.inkThird : color} height={5} />
-                  <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
-                    <Text style={{ fontSize: 12, color: t.inkThird, fontWeight: "500" }}>{s.subs} areas</Text>
-                    <Text style={{ fontSize: 12, color: t.green, fontWeight: "700" }}>✓ {s.done}</Text>
-                    <Text style={{ fontSize: 12, color: t.inkThird, fontWeight: "500" }}>○ {s.total - s.done} left</Text>
-                    {g.targetDate ? <Text style={{ fontSize: 11, color: t.inkThird, marginLeft: "auto", fontWeight: "700" }}>{g.targetDate}</Text> : null}
-                  </View>
-                </View>
 
-                <ChevronRight size={15} color={t.inkThird} strokeWidth={3} />
-              </TouchableOpacity>
-              {i < filteredGoals.length - 1 && <View style={{ height: 1, backgroundColor: t.separator, marginLeft: 78 }} />}
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "700", color: t.labelPrimary, letterSpacing: -0.3 }}>{g.name}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "900", color: viewMode === "archived" ? t.inkThird : color }}>{s.p}%</Text>
+                    </View>
+                    {g.description ? (
+                      <Text numberOfLines={1} style={{ fontSize: 13, color: t.inkThird, marginBottom: 8, lineHeight: 18, fontWeight: "500" }}>{g.description}</Text>
+                    ) : null}
+                    <ProgressBar value={s.p} color={viewMode === "archived" ? t.inkThird : color} height={5} />
+                    <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+                      <Text style={{ fontSize: 12, color: t.inkThird, fontWeight: "500" }}>{s.subs} areas</Text>
+                      <Text style={{ fontSize: 12, color: t.green, fontWeight: "700" }}>✓ {s.done}</Text>
+                      <Text style={{ fontSize: 12, color: t.inkThird, fontWeight: "500" }}>○ {s.total - s.done} left</Text>
+                      {g.targetDate ? <Text style={{ fontSize: 11, color: t.inkThird, marginLeft: "auto", fontWeight: "700" }}>{g.targetDate}</Text> : null}
+                    </View>
+                  </View>
+
+                  <ChevronRight size={15} color={t.inkThird} strokeWidth={3} />
+                </TouchableOpacity>
+                {i < filteredGoals.length - 1 && <View style={{ height: 1, backgroundColor: t.separator, marginLeft: 78 }} />}
+              </View>
+            );
+          })}
+
+          {filteredGoals.length === 0 && (
+            <View style={{ paddingVertical: 32, alignItems: "center" }}>
+              <Text style={{ color: t.inkThird, fontSize: 14, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                {viewMode === "archived" ? "No archived goals" : "No active goals"}
+              </Text>
             </View>
-          );
-        })}
+          )}
 
-        {filteredGoals.length === 0 && (
-          <View style={{ paddingVertical: 32, alignItems: "center" }}>
-            <Text style={{ color: t.inkThird, fontSize: 14, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
-              {viewMode === "archived" ? "No archived goals" : "No active goals"}
-            </Text>
-          </View>
-        )}
-
-        {viewMode === "active" && (
-          <>
-            {filteredGoals.length > 0 && <View style={{ height: 1, backgroundColor: t.separator }} />}
-            <NewItemRow label="New Goal" onClick={() => setShowAdd(true)} />
-          </>
-        )}
-      </View>
+          {viewMode === "active" && (
+            <>
+              {filteredGoals.length > 0 && <View style={{ height: 1, backgroundColor: t.separator }} />}
+              <NewItemRow label="New Goal" onClick={() => setShowAdd(true)} />
+            </>
+          )}
+        </View>
+      </ScrollView>
 
       {/* Add sheet */}
       <Sheet title="New Goal" visible={showAdd} onClose={() => setShowAdd(false)}>
@@ -196,6 +198,6 @@ export default function GoalsScreen({ state, dispatch, navigate }) {
 
         <SheetBtn onClick={add} icon={Plus}>Create Goal</SheetBtn>
       </Sheet>
-    </ScrollView>
+    </View>
   );
 }
