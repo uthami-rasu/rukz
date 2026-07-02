@@ -306,9 +306,39 @@ export default function App() {
     return true;
   };
 
+  const getGoogleAccessToken = async () => {
+    try {
+      if (typeof GoogleSignin.getTokens === 'function') {
+        const tokens = await GoogleSignin.getTokens();
+        if (tokens && tokens.accessToken) {
+          return tokens.accessToken;
+        }
+      }
+    } catch (e) {
+      console.log("getTokens failed, trying silent sign in:", e);
+    }
+
+    try {
+      const userInfo = await GoogleSignin.signInSilently();
+      const tokens = userInfo && (userInfo.data ? userInfo.data : userInfo);
+      if (tokens && tokens.accessToken) {
+        return tokens.accessToken;
+      }
+    } catch (e) {
+      console.log("signInSilently failed:", e);
+    }
+
+    const userInfo = await GoogleSignin.signIn();
+    const tokens = userInfo && (userInfo.data ? userInfo.data : userInfo);
+    if (tokens && tokens.accessToken) {
+      return tokens.accessToken;
+    }
+
+    throw new Error("Could not retrieve access token from Google.");
+  };
+
   const performGoogleDriveBackup = async (stateToBackup) => {
-    const tokens = await GoogleSignin.getTokens();
-    const accessToken = tokens.accessToken;
+    const accessToken = await getGoogleAccessToken();
 
     // Find backup file in appDataFolder
     const queryUrl = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27rukz_backup.json%27&fields=files(id%2Cname)';
@@ -605,12 +635,7 @@ export default function App() {
                 await new Promise(r => setTimeout(r, 1200));
                 backupDataStr = await AsyncStorage.getItem("google_drive_mock_backup");
               } else {
-                const isSignedIn = await GoogleSignin.isSignedIn();
-                if (!isSignedIn) {
-                  await GoogleSignin.signIn();
-                }
-                const tokens = await GoogleSignin.getTokens();
-                const accessToken = tokens.accessToken;
+                const accessToken = await getGoogleAccessToken();
 
                 const queryUrl = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27rukz_backup.json%27&fields=files(id%2Cname)';
                 const searchRes = await fetch(queryUrl, {
