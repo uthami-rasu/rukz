@@ -1,6 +1,19 @@
 export function reducer(state, action) {
   switch (action.type) {
     case "SET_STATE":   return action.state;
+    case "UPDATE_BACKUP_CONFIG":
+      return {
+        ...state,
+        backupConfig: {
+          ...(state.backupConfig || {
+            isGoogleLinked: false,
+            googleEmail: "",
+            frequency: "Off",
+            lastBackupTime: null,
+          }),
+          ...action.updates
+        }
+      };
     case "ADD_GOAL":    return { ...state, goals:    [...state.goals,    action.goal]    };
     case "ADD_SUBGOAL": return { ...state, subGoals: [...state.subGoals, action.subGoal] };
     case "ADD_TASK":    return { ...state, tasks:    [...state.tasks,    action.task]    };

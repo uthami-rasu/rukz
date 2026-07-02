@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity,
-  Platform, Alert, BackHandler, Linking, LogBox,
+  Platform, Alert, BackHandler, Linking, LogBox, AppState, ActivityIndicator,
+  NativeModules,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
@@ -11,10 +13,31 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import * as XLSX from "xlsx";
-import { ChevronLeft, Sun, Moon, Share2, Download, Upload, User } from "lucide-react-native";
+import { ChevronLeft, Sun, Moon, Share2, Download, Upload, User, Cloud, RefreshCw, Check, AlertCircle } from "lucide-react-native";
 import * as Notifications from "expo-notifications";
 import { useShareIntent } from "expo-share-intent";
 import { formatDateString } from "./src/utils/helpers";
+import SegmentedControl from "./src/components/ui/SegmentedControl";
+let GoogleSignin = null;
+let statusCodes = {};
+
+const hasNativeGoogleSignin = !!(NativeModules.RNGoogleSignin || NativeModules.RNGoogleSignin);
+
+if (hasNativeGoogleSignin) {
+  try {
+    const GoogleLibrary = require("@react-native-google-signin/google-signin");
+    GoogleSignin = GoogleLibrary.GoogleSignin;
+    statusCodes = GoogleLibrary.statusCodes;
+
+    GoogleSignin.configure({
+      scopes: ["https://www.googleapis.com/auth/drive.appdata"],
+      webClientId: "812843966426-2igt98s6agt5426ebet6qh4h705f4q6p.apps.googleusercontent.com",
+      offlineAccess: true,
+    });
+  } catch (e) {
+    console.warn("GoogleSignin configuration failed:", e.message);
+  }
+}
 
 // Suppress hardcoded Expo Go notifications warnings in console
 LogBox.ignoreLogs([
@@ -269,6 +292,433 @@ export default function App() {
         : ""
     : TAB_TITLES[tab];
 
+
+
+  // ── Google Backup state & handlers ───────────────────────────
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const checkGoogleSupport = () => {
+    if (!hasNativeGoogleSignin) return false;
+    if (Platform.OS === "web" || !GoogleSignin || typeof GoogleSignin.hasPlayServices !== "function") {
+      return false;
+    }
+    return true;
+  };
+
+  const performGoogleDriveBackup = async (stateToBackup) => {
+    const tokens = await GoogleSignin.getTokens();
+    const accessToken = tokens.accessToken;
+
+    // Find backup file in appDataFolder
+    const queryUrl = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27rukz_backup.json%27&fields=files(id%2Cname)';
+    const searchRes = await fetch(queryUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    if (!searchRes.ok) {
+      throw new Error(`Search failed: ${searchRes.statusText}`);
+    }
+    
+    const searchData = await searchRes.json();
+    const existingFileId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
+    const backupBody = JSON.stringify(stateToBackup);
+
+    if (existingFileId) {
+      // Update existing file
+      const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`;
+      const updateRes = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: backupBody
+      });
+      if (!updateRes.ok) throw new Error(`Update failed: ${updateRes.statusText}`);
+    } else {
+      // Create new file metadata
+      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: 'rukz_backup.json',
+          parents: ['appDataFolder']
+        })
+      });
+      if (!createRes.ok) throw new Error(`Creation failed: ${createRes.statusText}`);
+      
+      const newFile = await createRes.json();
+      const newFileId = newFile.id;
+
+      // Upload actual data content
+      const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`;
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: backupBody
+      });
+      if (!uploadRes.ok) throw new Error(`Content upload failed: ${uploadRes.statusText}`);
+    }
+  };
+
+  // Auto-backup watcher
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const checkAndBackup = async (state) => {
+      const config = state.backupConfig;
+      if (!config || !config.isGoogleLinked || config.frequency === "Off") return;
+
+      const lastBackupStr = config.lastBackupTime;
+      const now = new Date();
+      let shouldBackup = false;
+
+      if (!lastBackupStr) {
+        shouldBackup = true;
+      } else {
+        const lastBackup = new Date(lastBackupStr);
+        const diffMs = now.getTime() - lastBackup.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+        if (config.frequency === "Daily" && diffDays >= 1) {
+          shouldBackup = true;
+        } else if (config.frequency === "Weekly" && diffDays >= 7) {
+          shouldBackup = true;
+        } else if (config.frequency === "Monthly" && diffDays >= 30) {
+          shouldBackup = true;
+        }
+      }
+
+      if (shouldBackup) {
+        if (!checkGoogleSupport()) {
+          console.log("Simulating background auto-backup...");
+          try {
+            const backupData = JSON.stringify(state);
+            await AsyncStorage.setItem("google_drive_mock_backup", backupData);
+            dispatch({
+              type: "UPDATE_BACKUP_CONFIG",
+              updates: { lastBackupTime: now.toISOString() }
+            });
+          } catch (e) {
+            console.warn("Simulated auto-backup failed:", e);
+          }
+        } else {
+          console.log("Running real Google Drive background auto-backup...");
+          try {
+            const isSignedIn = await GoogleSignin.isSignedIn();
+            if (isSignedIn) {
+              await GoogleSignin.signInSilently();
+              await performGoogleDriveBackup(state);
+              dispatch({
+                type: "UPDATE_BACKUP_CONFIG",
+                updates: { lastBackupTime: now.toISOString() }
+              });
+              console.log("Real background auto-backup successful!");
+            }
+          } catch (e) {
+            console.error("Real background auto-backup failed:", e);
+          }
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "background") {
+        checkAndBackup(appState);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [appState]);
+
+  const handleGoogleLink = async () => {
+    if (!checkGoogleSupport()) {
+      if (Platform.OS === "web") {
+        const email = window.prompt("Enter your Google email to link:", "user@gmail.com");
+        if (!email) return;
+        if (!email.includes("@")) {
+          alert("Please enter a valid Google email address.");
+          return;
+        }
+        dispatch({
+          type: "UPDATE_BACKUP_CONFIG",
+          updates: {
+            isGoogleLinked: true,
+            googleEmail: email.trim(),
+            lastBackupTime: null,
+          }
+        });
+        alert(`Successfully linked with ${email} (Simulated).`);
+      } else {
+        Alert.alert(
+          "Link Google Account (Simulated)",
+          "Since you are running in Expo Go or local environment, real Google Sign-In is unavailable. Would you like to connect a simulated account (test-user@gmail.com) to test the backup flow?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Connect (Mock)",
+              onPress: () => {
+                dispatch({
+                  type: "UPDATE_BACKUP_CONFIG",
+                  updates: {
+                    isGoogleLinked: true,
+                    googleEmail: "test-user@gmail.com",
+                    lastBackupTime: null,
+                  }
+                });
+                Alert.alert("Simulated Connection", "Successfully linked with test-user@gmail.com.\nAuto-backups will simulate uploads to Google Drive.");
+              }
+            }
+          ]
+        );
+      }
+      return;
+    }
+
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const userInfo = await GoogleSignin.signIn();
+      const email = userInfo.user.email;
+      
+      dispatch({
+        type: "UPDATE_BACKUP_CONFIG",
+        updates: {
+          isGoogleLinked: true,
+          googleEmail: email,
+          lastBackupTime: null,
+        }
+      });
+      Alert.alert("Google Account Linked", `Successfully linked with ${email} for Google Drive backups.`);
+    } catch (error) {
+      console.error(error);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert("Cancelled", "Google sign-in was cancelled.");
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        Alert.alert("In Progress", "Google sign-in is already in progress.");
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert("Play Services", "Google Play Services is not available or outdated.");
+      } else {
+        Alert.alert("Sign-In Error", `Could not connect to Google: ${error.message || error}`);
+      }
+    }
+  };
+
+  const handleGoogleUnlink = async () => {
+    Alert.alert(
+      "Disconnect Google Drive",
+      "Are you sure you want to disconnect your Google Account? This will stop automatic backups, but your existing backups on Google Drive will remain intact.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: async () => {
+            if (checkGoogleSupport()) {
+              try {
+                await GoogleSignin.signOut();
+              } catch (e) {
+                console.log("Error signing out of Google:", e);
+              }
+            }
+            dispatch({
+              type: "UPDATE_BACKUP_CONFIG",
+              updates: {
+                isGoogleLinked: false,
+                googleEmail: "",
+                frequency: "Off",
+                lastBackupTime: null,
+              }
+            });
+          }
+        }
+      ]
+    );
+  };
+
+  const handleGoogleBackup = async () => {
+    if (backingUp) return;
+    setBackingUp(true);
+    try {
+      if (!checkGoogleSupport()) {
+        await new Promise(r => setTimeout(r, 1200));
+        const backupData = JSON.stringify(appState);
+        await AsyncStorage.setItem("google_drive_mock_backup", backupData);
+        dispatch({
+          type: "UPDATE_BACKUP_CONFIG",
+          updates: { lastBackupTime: new Date().toISOString() }
+        });
+        Alert.alert("Simulated Backup", "Data backed up to simulated Google Drive storage.");
+        return;
+      }
+
+      const isSignedIn = await GoogleSignin.isSignedIn();
+      if (!isSignedIn) {
+        await GoogleSignin.signIn();
+      }
+      await performGoogleDriveBackup(appState);
+      dispatch({
+        type: "UPDATE_BACKUP_CONFIG",
+        updates: { lastBackupTime: new Date().toISOString() }
+      });
+      Alert.alert("Backup Successful", "Your data has been successfully backed up to your Google Drive App Data folder.");
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Backup Failed", `Could not complete Google Drive backup: ${e.message || e}`);
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const handleGoogleRestore = async () => {
+    if (restoring) return;
+    Alert.alert(
+      "Confirm Restore",
+      "This will restore your data from Google Drive. It will merge the backed up goals, tasks, and watch later links with your current local data. Do you want to proceed?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Restore & Merge",
+          onPress: async () => {
+            setRestoring(true);
+            try {
+              let backupDataStr;
+
+              if (!checkGoogleSupport()) {
+                await new Promise(r => setTimeout(r, 1200));
+                backupDataStr = await AsyncStorage.getItem("google_drive_mock_backup");
+              } else {
+                const isSignedIn = await GoogleSignin.isSignedIn();
+                if (!isSignedIn) {
+                  await GoogleSignin.signIn();
+                }
+                const tokens = await GoogleSignin.getTokens();
+                const accessToken = tokens.accessToken;
+
+                const queryUrl = 'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%27rukz_backup.json%27&fields=files(id%2Cname)';
+                const searchRes = await fetch(queryUrl, {
+                  headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                if (!searchRes.ok) throw new Error("Search backup file failed");
+                const searchData = await searchRes.json();
+                const existingFileId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
+
+                if (!existingFileId) {
+                  Alert.alert("No Backup Found", "No previous Rukz backups were found in your Google Drive account.");
+                  return;
+                }
+
+                const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFileId}?alt=media`, {
+                  headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                if (!downloadRes.ok) throw new Error("Downloading backup data failed");
+                backupDataStr = await downloadRes.text();
+              }
+
+              if (!backupDataStr) {
+                Alert.alert("No Backup Found", "No previous Rukz backups were found in your Google Drive account.");
+                return;
+              }
+
+              const parsed = JSON.parse(backupDataStr);
+              if (parsed.goals && parsed.subGoals && parsed.tasks) {
+                const currentGoals = [...appState.goals];
+                const currentSubGoals = [...appState.subGoals];
+                const currentTasks = [...appState.tasks];
+                const currentWatchLater = [...(appState.watchLater || [])];
+                const currentCategories = [...(appState.watchLaterCategories || ["YouTube", "Instagram", "Tutorials", "Articles", "Other"])];
+
+                const idMap = {};
+
+                // 1. Merge Goals
+                (parsed.goals || []).forEach(g => {
+                  const existingGoal = currentGoals.find(cg => cg.name.trim().toLowerCase() === g.name.trim().toLowerCase());
+                  if (existingGoal) {
+                    idMap[g.id] = existingGoal.id;
+                    if (g.status === "active") existingGoal.status = "active";
+                  } else {
+                    const newId = Date.now() + Math.random();
+                    idMap[g.id] = newId;
+                    currentGoals.push({ ...g, id: newId, status: g.status || "active" });
+                  }
+                });
+
+                // 2. Merge SubGoals
+                (parsed.subGoals || []).forEach(s => {
+                  const newGoalId = idMap[s.goalId];
+                  if (!newGoalId) return;
+                  const existingSub = currentSubGoals.find(cs => cs.goalId === newGoalId && cs.name.trim().toLowerCase() === s.name.trim().toLowerCase());
+                  if (existingSub) {
+                    idMap[s.id] = existingSub.id;
+                  } else {
+                    const newId = Date.now() + Math.random();
+                    idMap[s.id] = newId;
+                    currentSubGoals.push({ ...s, id: newId, goalId: newGoalId });
+                  }
+                });
+
+                // 3. Merge Tasks
+                (parsed.tasks || []).forEach(t => {
+                  const newSubGoalId = idMap[t.subGoalId];
+                  if (!newSubGoalId) return;
+                  const existingTask = currentTasks.find(ct => ct.subGoalId === newSubGoalId && ct.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+                  if (!existingTask) {
+                    currentTasks.push({ ...t, id: Date.now() + Math.random(), subGoalId: newSubGoalId });
+                  }
+                });
+
+                // 4. Merge Watch Later
+                (parsed.watchLater || []).forEach(item => {
+                  const exists = currentWatchLater.some(cw => cw.url.trim().toLowerCase() === item.url.trim().toLowerCase());
+                  if (!exists) {
+                    currentWatchLater.push({ ...item, id: Date.now() + Math.random() });
+                  }
+                });
+
+                dispatch({
+                  type: "SET_STATE",
+                  state: {
+                    ...appState,
+                    goals: currentGoals,
+                    subGoals: currentSubGoals,
+                    tasks: currentTasks,
+                    watchLater: currentWatchLater,
+                    watchLaterCategories: currentCategories,
+                  }
+                });
+
+                Alert.alert("Restore Complete", "Your database has been successfully synchronized and merged with the backup.");
+              } else {
+                Alert.alert("Error", "Backup file structure is invalid.");
+              }
+            } catch (e) {
+              console.error(e);
+              Alert.alert("Error", `Could not retrieve backup: ${e.message || e}`);
+            } finally {
+              setRestoring(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const formatLastBackup = (timeStr) => {
+    if (!timeStr) return "Never";
+    try {
+      const d = new Date(timeStr);
+      return d.toLocaleString([], { dateStyle: "short", timeStyle: "short" });
+    } catch (e) {
+      return "Never";
+    }
+  };
+
   // ── File operations ──────────────────────────────────────────
 
   const handleExport = async () => {
@@ -507,6 +957,13 @@ export default function App() {
 
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: theme.bg }} />;
 
+  const backupConfig = appState.backupConfig || {
+    isGoogleLinked: false,
+    googleEmail: "",
+    frequency: "Off",
+    lastBackupTime: null,
+  };
+
   return (
     <SafeAreaProvider>
       <ThemeCtx.Provider value={theme}>
@@ -629,30 +1086,198 @@ export default function App() {
               </TouchableOpacity>
             </GroupCard>
 
-            <SectionHeader>Backup & Sync (Google Drive / iCloud)</SectionHeader>
-            <Text style={{ fontSize: 13, color: theme.inkThird, lineHeight: 18, paddingHorizontal: 4 }}>
-              Since this app is entirely backend-free, your data is saved only on this phone. You can backup and restore your database using Google Drive, iCloud, or local storage.
-            </Text>
+            <SectionHeader>Google Drive Auto-Backup</SectionHeader>
+            
+            {!backupConfig.isGoogleLinked ? (
+              <View style={{
+                backgroundColor: theme.isDark ? "#1C1C22" : "#FFFFFF",
+                borderRadius: 16,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: theme.border,
+                gap: 12,
+                ...theme.shadow
+              }}>
+                <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                  <View style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 21,
+                    backgroundColor: theme.blue + "15",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}>
+                    <Cloud size={20} color={theme.blue} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, color: theme.labelPrimary, fontWeight: "700" }}>Google Account Sync</Text>
+                    <Text style={{ fontSize: 12, color: theme.inkThird, marginTop: 2 }}>Secure backup & sync like WhatsApp</Text>
+                  </View>
+                </View>
 
-            <View style={{
-              backgroundColor: theme.isDark ? "#222228" : "#E4ECE7",
-              borderRadius: 14,
-              padding: 14,
-              borderWidth: 1.5,
-              borderColor: theme.border,
-              marginBottom: 4
-            }}>
-              <Text style={{ fontSize: 12, color: theme.labelPrimary, fontWeight: "600", lineHeight: 18 }}>
-                💡 <Text style={{ fontWeight: "800" }}>Sync via Google Drive:</Text>{"\n"}
-                1. Tap <Text style={{ fontWeight: "800", color: theme.blue }}>Cloud Backup</Text> below and select "Save to Drive" (Google Drive).{"\n"}
-                2. Tap <Text style={{ fontWeight: "800", color: theme.green }}>Restore Backup</Text> and choose the backup file from Google Drive to sync your data.
-              </Text>
-            </View>
+                <Text style={{ fontSize: 13, color: theme.labelSecondary, lineHeight: 18 }}>
+                  Connect your Google account to automatically upload your goals, focus areas, and tasks. Backups are stored privately in your Google Drive.
+                </Text>
 
+                <TouchableOpacity
+                  onPress={handleGoogleLink}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: theme.blue,
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    marginTop: 6
+                  }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>Link Google Account</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{
+                backgroundColor: theme.isDark ? "#1C1C22" : "#FFFFFF",
+                borderRadius: 16,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: theme.border,
+                gap: 14,
+                ...theme.shadow
+              }}>
+                {/* Connected status */}
+                <View style={{ flexDirection: "row", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", gap: 12, alignItems: "center", flex: 1 }}>
+                    <View style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: theme.green + "15",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}>
+                      <Cloud size={18} color={theme.green} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: theme.inkThird, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 }}>Connected Account</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 15, color: theme.labelPrimary, fontWeight: "700", marginTop: 2 }}>{backupConfig.googleEmail}</Text>
+                    </View>
+                  </View>
+                  
+                  <TouchableOpacity
+                    onPress={handleGoogleUnlink}
+                    activeOpacity={0.7}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.isDark ? "#282830" : "#F4F4F6",
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: theme.labelPrimary, fontWeight: "700" }}>Disconnect</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <FullSep />
+
+                {/* Backup Frequency */}
+                <View>
+                  <Text style={{ fontSize: 13, color: theme.labelSecondary, fontWeight: "700", marginBottom: 10 }}>Auto-Backup Frequency</Text>
+                  <SegmentedControl
+                    options={[
+                      { label: "Off", value: "Off" },
+                      { label: "Daily", value: "Daily" },
+                      { label: "Weekly", value: "Weekly" },
+                      { label: "Monthly", value: "Monthly" },
+                    ]}
+                    value={backupConfig.frequency}
+                    onChange={(val) => {
+                      dispatch({
+                        type: "UPDATE_BACKUP_CONFIG",
+                        updates: { frequency: val }
+                      });
+                    }}
+                  />
+                </View>
+
+                {/* Last Backup Info */}
+                <View style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  backgroundColor: theme.isDark ? "#222228" : "#F4F6F5",
+                  padding: 12,
+                  borderRadius: 10,
+                  borderWidth: 0.5,
+                  borderColor: theme.border
+                }}>
+                  <Text style={{ fontSize: 13, color: theme.labelSecondary }}>Last backup to Drive:</Text>
+                  <Text style={{ fontSize: 13, color: theme.labelPrimary, fontWeight: "600" }}>{formatLastBackup(backupConfig.lastBackupTime)}</Text>
+                </View>
+
+                {/* Actions */}
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
+                  <TouchableOpacity
+                    onPress={handleGoogleBackup}
+                    disabled={backingUp || restoring}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      backgroundColor: theme.blue,
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      gap: 8,
+                      opacity: backingUp || restoring ? 0.7 : 1
+                    }}
+                  >
+                    {backingUp ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <RefreshCw size={14} color="#FFFFFF" />
+                        <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Backup Now</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleGoogleRestore}
+                    disabled={backingUp || restoring}
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1.5,
+                      borderColor: theme.green,
+                      backgroundColor: theme.green + "10",
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      gap: 8,
+                      opacity: backingUp || restoring ? 0.7 : 1
+                    }}
+                  >
+                    {restoring ? (
+                      <ActivityIndicator size="small" color={theme.green} />
+                    ) : (
+                      <>
+                        <Download size={14} color={theme.green} />
+                        <Text style={{ color: theme.green, fontWeight: "700", fontSize: 13 }}>Restore Sync</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            <SectionHeader>Local Backup & CSV Import</SectionHeader>
             <GroupCard>
               {[
-                { label: "Cloud Backup",          sub: "Upload backup to Google Drive, iCloud, etc.", icon: Share2,   color: theme.blue,   onPress: handleExport         },
-                { label: "Restore Backup",        sub: "Sync from a Google Drive or iCloud backup file", icon: Download, color: theme.green,  onPress: handleImport         },
+                { label: "Share Backup File",      sub: "Export local backup file for sharing/storage", icon: Share2,   color: theme.blue,   onPress: handleExport         },
+                { label: "Import Backup File",     sub: "Merge local backup JSON file manually",     icon: Download, color: theme.green,  onPress: handleImport         },
                 { label: "Upload Excel / CSV",    sub: "Bulk import goals, areas, and tasks",       icon: Upload,   color: theme.indigo, onPress: handleExcelImport    },
                 { label: "Download CSV Template", sub: "Get the sample structure for bulk uploads", icon: Download, color: theme.amber,  onPress: handleDownloadTemplate },
               ].map(({ label, sub, icon: Icon, color, onPress }, idx, arr) => (

@@ -8,6 +8,12 @@ export const SEED = {
   tasks: [],
   watchLater: [],
   watchLaterCategories: ["YouTube", "Instagram", "Tutorials", "Articles", "Other"],
+  backupConfig: {
+    isGoogleLinked: false,
+    googleEmail: "",
+    frequency: "Off", // "Off", "Daily", "Weekly", "Monthly", "Manual"
+    lastBackupTime: null,
+  }
 };
 
 export const loadLocalData = async () => {
@@ -21,6 +27,12 @@ export const loadLocalData = async () => {
         tasks: parsed.tasks || [],
         watchLater: parsed.watchLater || [],
         watchLaterCategories: parsed.watchLaterCategories || ["YouTube", "Instagram", "Tutorials", "Articles", "Other"],
+        backupConfig: parsed.backupConfig || {
+          isGoogleLinked: false,
+          googleEmail: "",
+          frequency: "Off",
+          lastBackupTime: null,
+        }
       };
     }
     return SEED;
