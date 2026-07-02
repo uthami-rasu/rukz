@@ -485,7 +485,12 @@ export default function App() {
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const userInfo = await GoogleSignin.signIn();
-      const email = userInfo.user.email;
+      const userObj = userInfo && (userInfo.data ? userInfo.data.user : userInfo.user);
+      const email = userObj ? userObj.email : null;
+      
+      if (!email) {
+        throw new Error("Could not retrieve email from Google Account.");
+      }
       
       dispatch({
         type: "UPDATE_BACKUP_CONFIG",
@@ -522,9 +527,15 @@ export default function App() {
           onPress: async () => {
             if (checkGoogleSupport()) {
               try {
+                await GoogleSignin.revokeAccess();
                 await GoogleSignin.signOut();
               } catch (e) {
-                console.log("Error signing out of Google:", e);
+                console.log("Error revoking Google access, attempting sign out:", e);
+                try {
+                  await GoogleSignin.signOut();
+                } catch (signOutError) {
+                  console.log("Error signing out of Google:", signOutError);
+                }
               }
             }
             dispatch({
